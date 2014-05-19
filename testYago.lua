@@ -1,7 +1,7 @@
 local yago = require 'yago'
 
-sString = 'a,     b,    c_,    d,     e_,      f,    g'
-lString = 'alpha, beta, gamma, delta, epsilon, zeta, eta'
+local sString = 'a,     b,    c_,    d,     e_,      f,    g'
+local lString = 'alpha, beta, gamma, delta, epsilon, zeta, eta'
 
 local status, arg, Opts = pcall(yago.getOpt, arg, sString, lString)
 if not status then

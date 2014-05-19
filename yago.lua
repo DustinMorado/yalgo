@@ -135,6 +135,12 @@ function yago.getOpt(Arg, shorts, longs)
             return Arg, sOpts
          end
       end
+
+      -- If a function has no arguments only options
+      if num == #Arg then
+         Arg = {}
+         return Arg, sOpts
+      end
    end
 end
 return yago
