@@ -26,7 +26,7 @@ function yago.getOpt(Arg, shorts, longs)
    end
    oSopts, oLopts = nil
 
-   if #Sopts ~= #Lopts then
+   if #sOpts ~= #lOpts then
       error('\n\nError: The number of short opts and long opts do not match.\n')
    end
 
