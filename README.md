@@ -28,17 +28,12 @@ options removed and a table with your option flags.
 ***
 
 ### Example ###
-`local yago = require 'yago'`
-
-`shortOptString = 'a,     b,    c_' #Use _ to denote required option argument`
-
-`longOptString  = 'alpha, beta, gamma'`
-
-`arg, Opts = yago.getOpt(arg, shortOptString, longOptString)`
-
-`if Opts.a then <...> end`
-
-`if Opts.c_ == 'argToC' then <...> end`
+    local yago = require 'yago'
+    shortOptString = 'a,     b,    c_' #Use _ to denote required option argument
+    longOptString  = 'alpha, beta, gamma'
+    arg, Opts = yago.getOpt(arg, shortOptString, longOptString)
+    if Opts.a then <...> end`
+    if Opts.c_ == 'argToC' then <...> end
 
 ***
 
