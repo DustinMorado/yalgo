@@ -1,0 +1,271 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>yalgo - Documentation</title>
+    <link rel="stylesheet" href="ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>yalgo</h1>
+
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Class_Parser">Class Parser </a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="$(kind=='Topics' and '' or 'nowrap'">
+  <li><strong>yalgo</strong></li>
+</ul>
+<h2>Topics</h2>
+<ul class="$(kind=='Topics' and '' or 'nowrap'">
+  <li><a href="topics/README.md.html">README</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>yalgo</code></h1>
+<p>Yet Another Lua Get Opts &ndash; Command line argument parser.</p>
+<p>
+</p>
+    <h3>Info:</h3>
+    <ul>
+        <li><strong>Release</strong>: 0.2.0</li>
+        <li><strong>License</strong>: MIT</li>
+        <li><strong>Author</strong>: Dustin Reed Morado</li>
+    </ul>
+
+
+<h2><a href="#Class_Parser">Class Parser </a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#Parser:new">Parser:new (descr)</a></td>
+	<td class="summary">Creates a new parser object:</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#Parser.template_arg">Parser.template_arg</a></td>
+	<td class="summary">Argument template for Parser.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#Parser:add_arg">Parser:add_arg (_arg)</a></td>
+	<td class="summary">Add an argument to a parser object</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#Parser:disp_help">Parser:disp_help (prog_name)</a></td>
+	<td class="summary">Display program help</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#Parser:get_args">Parser:get_args (args)</a></td>
+	<td class="summary">Get arguments</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header has-description"><a name="Class_Parser"></a>Class Parser </h2>
+
+          <div class="section-description">
+          yalgo Parser class
+          </div>
+    <dl class="function">
+    <dt>
+    <a name = "Parser:new"></a>
+    <strong>Parser:new (descr)</strong>
+    </dt>
+    <dd>
+    Creates a new parser object:  returns a parser with the given description, and standard help options.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">descr</span>
+         A description for the CLI program you are parsing
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+        A parser object
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">my_parser = yalgo.Parser:new(<span class="string">'A sample program description.'</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "Parser.template_arg"></a>
+    <strong>Parser.template_arg</strong>
+    </dt>
+    <dd>
+    Argument template for Parser.
+ This is a sample argument object for passing into add_argument.</p>
+
+<p> l_opt and s_opt flags cannot be used for positional arguments, but at least
+ one must be given for an option argument.</p>
+
+<p> Option arguments cannot be required and not take arguments.</p>
+
+<p> Positional arguments cannot take arguments themselves.</p>
+
+<p> Required arguments cannot specify a default value.</p>
+
+<p> Description and meta_values are not mandatory unless you use the display_help
+ function (But of course you're providing adequate documentation right? ;))
+
+
+    <h3>Fields:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+        Argument name used as field in returned option table.
+        </li>
+        <li><span class="parameter">l_opt</span>
+        Specifies option long style flag
+        </li>
+        <li><span class="parameter">s_opt</span>
+        Specifies option short style flag
+        </li>
+        <li><span class="parameter">is_pos</span>
+        Indicaties whether argument is positional or an option
+        </li>
+        <li><span class="parameter">has_arg</span>
+        Indicates whether option takes an argument
+        </li>
+        <li><span class="parameter">is_reqd</span>
+        Indicates whether option is mandatory or not
+        </li>
+        <li><span class="parameter">dflt_val</span>
+        Specifies a default value to be used for the option
+        </li>
+        <li><span class="parameter">descr</span>
+        Option description to be used for help
+        </li>
+        <li><span class="parameter">meta_val</span>
+        Specifies argument placeholder string used in help
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "Parser:add_arg"></a>
+    <strong>Parser:add_arg (_arg)</strong>
+    </dt>
+    <dd>
+    Add an argument to a parser object  This function lets the parser know what arguments to look for at the command
+ line.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">_arg</span>
+         An argument table with the fields as described in template_arg
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">my_parser:add_arg({name = <span class="string">'option'</span>, l_opt = <span class="string">'--opt'</span>, ... })</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "Parser:disp_help"></a>
+    <strong>Parser:disp_help (prog_name)</strong>
+    </dt>
+    <dd>
+    Display program help  Shows usage and detail optional and positional arguments
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">prog_name</span>
+         Program name, default is _G.arg[0]
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">my_parser:disp_help()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "Parser:get_args"></a>
+    <strong>Parser:get_args (args)</strong>
+    </dt>
+    <dd>
+    Get arguments  takes an arg table and updates the parser arg table values returning a table
+ indexed by argument name storing the found and default values.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">args</span>
+         Sequence table of arguments, default is _G.arg
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+        A table indexed by parser argument name with found and default values
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">found_args = my_parser:get_args()</pre>
+    </ul>
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/stevedonovan/LDoc">LDoc 1.4.3</a></i>
+<i style="float:right;">Last updated 2015-05-15 14:04:13 </i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>
