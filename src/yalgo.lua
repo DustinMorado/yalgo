@@ -209,7 +209,7 @@ local function add_arg (self, _arg)
   -- Handle adding an optional argument
   else
     -- Optional arguments must have an option flag
-    if (not _arg.l_opt or not _arg.s_opt) then
+    if not ( _arg.l_opt or _arg.s_opt) then
       error('ERROR: yalgo.Parser:add_arg: Optional arguments must specify ' ..
             'a long and or short option flag.')
 
