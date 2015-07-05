@@ -28,51 +28,49 @@ names with the values found at the command line.
 
 ### Example ###
     local yalgo = require 'yalgo'
-    my_parser = yalgo.Parser:new('my program description')
-    my_parser:add_arg({
+    parser = yalgo:new_parser('my program description')
+    parser:add_argument({
       name = 'alpha',
-      l_opt = '--alpha',
-      s_opt = '-a',
-      descr = 'alpha option description' -- Option description used in disp_help
+      long_option = '--alpha',
+      short_option = '-a',
+      description = 'alpha option description' -- Used in parser:display_help()
     })
-    my_parser:add_arg({
+    my_parser:add_argument({
       name = 'beta',
-      l_opt = '--beta',
-      s_opt = '-b',
-      descr = 'beta option description'
+      long_option = '--beta',
+      short_option = '-b',
+      description = 'beta option description'
     })
-    my_parser:add_arg({
+    my_parser:add_argument({
       name = 'gamma',
-      l_opt = '-gamma',
-      s_opt = '-c',
-      has_arg = true, -- Option takes an argument
-      is_reqd = true, -- Option is mandatory
-      descr = 'gamma option description',
-      meta_val = 'ARG' -- Option argument place holder used in disp_help
+      long_option = '-gamma',
+      short_option = '-c',
+      has_argument = true, -- Option takes an argument
+      is_required = true, -- Option is mandatory
+      description = 'gamma option description',
+      meta_value = 'ARG' -- Option argument place holder used in disp_help
     })
-    my_parser:add_arg({
+    my_parser:add_argument({
       name = 'arg1',
-      is_pos = true, -- Specifies positional argument
-      is_reqd = true,
-      descr = 'arg1 description',
-      meta_val = 'ARG1'
+      is_positional = true, -- Specifies positional argument
+      is_required = true,
+      description = 'arg1 description',
+      meta_value = 'ARG1'
     })
-    my_parser:add_arg({
+    my_parser:add_argument({
       name = 'arg2',
-      is_pos = true,
-      descr = 'arg2 description',
-      meta_val = 'ARG2'
+      is_positional = true,
+      description = 'arg2 description',
+      meta_value = 'ARG2'
     })
-    opts = my_parser:get_args()
-    if opts.help then
-      my_parser:disp_help()
-      os.exit(0)
-    end
-    if opts.alpha then
+    options = my_parser:get_arguments()
+
+    if options.alpha then
       -- code if --alpha or -a was given ...
     end
-    if opts.gamma == 'arg_to_c' then
-      -- code if --gamma or -c was given with 'arg_to_c'
+
+    if options.gamma == 'arg_to_c' then
+      -- code if --gamma or -c was given with 'arg_to_c' argument
     end
 
 ***
@@ -82,3 +80,5 @@ Version & Changelog:
 0.1.0 - Initial release
 
 0.2.0 - Complete overhaul to more resemble Python's argparse module
+
+0.3.0 - Another overhaul to tidy up code and fix some logic errors
