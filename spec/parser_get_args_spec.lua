@@ -12,107 +12,127 @@ describe('Test getting CLI arguments', function()
   end)
 
   before_each(function()
-    parser = yalgo.Parser:new('My test parser')
+    parser = yalgo:new_parser()
     alpha = {
       name = 'alpha',
-      l_opt = '--alpha',
-      s_opt = '-a',
-      descr = 'alpha option description.'
+      long_option = '--alpha',
+      short_option = '-a',
+      description = 'alpha option description.'
     }
 
     beta = {
       name = 'beta',
-      l_opt = '--beta',
-      s_opt = '-b',
-      dflt_val = 10,
-      has_arg = true,
-      descr = 'beta option description.',
-      meta_val = 'NUM'
+      long_option = '--beta',
+      short_option = '-b',
+      default_value = 10,
+      has_argument = true,
+      description = 'beta option description.',
+      meta_value = 'NUM'
     }
 
     gamma = {
       name = 'gamma',
-      l_opt = '--gamma',
-      s_opt = '-c',
-      is_reqd = true,
-      has_arg = true,
-      descr = 'gamma option description.',
-      meta_val = 'FILE'
+      long_option = '--gamma',
+      short_option = '-c',
+      is_required = true,
+      has_argument = true,
+      description = 'gamma option description.',
+      meta_value = 'FILE'
+    }
+
+    delta = {
+      name = 'delta',
+      long_option = '--delta',
+      description = 'delta option description.'
+    }
+
+    epsilon = {
+      name = 'epsilon',
+      short_option = '-e',
+      description = 'epsilon option description.'
     }
 
     arg1 = {
       name = 'arg1',
-      is_pos = true,
-      is_reqd = true,
-      descr = 'arg1 pos argument description.',
-      meta_val = 'FILE'
+      is_positional = true,
+      is_required = true,
+      description = 'arg1 pos argument description.',
+      meta_value = 'FILE'
     }
 
     arg2 = {
       name = 'arg2',
-      is_pos = true,
-      dflt_val = 'output.txt',
-      descr = 'arg2 pos argument description.',
-      meta_val = 'FILE'
+      is_positional = true,
+      default_value = 'output.txt',
+      description = 'arg2 pos argument description.',
+      meta_value = 'FILE'
     }
-    parser:add_arg(alpha)
-    parser:add_arg(beta)
-    parser:add_arg(gamma)
-    parser:add_arg(arg1)
-    parser:add_arg(arg2)
+    parser:add_argument(alpha)
+    parser:add_argument(beta)
+    parser:add_argument(gamma)
+    parser:add_argument(delta)
+    parser:add_argument(epsilon)
+    parser:add_argument(arg1)
+    parser:add_argument(arg2)
   end)
 
   after_each(function()
-    parser, alpha, beta, gamma, arg1, arg2 = nil
+    parser, alpha, beta, gamma, delta, epsilon, arg1, arg2 = nil
   end)
 
   it('Should handle just the required aruments.', function ()
-    args = { [0] = 'myprog', '-c', '5', 'input.txt' }
-    opts = parser:get_args(args)
-    assert.are.equal(opts['gamma'], '5')
-    assert.are.equal(opts['arg1'], 'input.txt')
+    arguments = { [0] = 'myprog', '-c', '5', 'input.txt' }
+    options = parser:get_arguments(arguments)
+    assert.are.equal(options.gamma, '5')
+    assert.are.equal(options.arg1, 'input.txt')
   end)
 
   it('Should handle basic input.', function ()
-    args = { [0] = 'myprog', '-a', '-b', '25', '-c', '5', 'arg1', 'arg2' }
-    opts = parser:get_args(args)
-    assert.is.True(opts['alpha'])
-    assert.are.equal(opts['beta'], '25')
-    assert.are.equal(opts['gamma'], '5')
-    assert.are.equal(opts['arg1'], 'arg1')
-    assert.are.equal(opts['arg2'], 'arg2')
+    arguments = { [0] = 'myprog', '-a', '-b', '25', '-c', '5', '--delta', '-e',
+                  'arg1', 'arg2' }
+    options = parser:get_arguments(arguments)
+    assert.is.True(options.alpha)
+    assert.are.equal(options.beta, '25')
+    assert.are.equal(options.gamma, '5')
+    assert.is.True(options.delta)
+    assert.is.True(options.epsilon)
+    assert.are.equal(options.arg1, 'arg1')
+    assert.are.equal(options.arg2, 'arg2')
   end)
 
   it('Should handle GNU-style long options.', function ()
-    args = { [0] = 'myprog', '-ab25', '--gamma', '5', 'arg1', 'arg2' }
-    opts = parser:get_args(args)
-    assert.is.True(opts['alpha'])
-    assert.are.equal(opts['beta'], '25')
-    assert.are.equal(opts['gamma'], '5')
-    assert.are.equal(opts['arg1'], 'arg1')
-    assert.are.equal(opts['arg2'], 'arg2')
+    arguments = { [0] = 'myprog', '-aeb25', '--gamma', '5', '--delta', 'arg1',
+                  'arg2' }
+    options = parser:get_arguments(arguments)
+    assert.is.True(options.alpha)
+    assert.are.equal(options.beta, '25')
+    assert.are.equal(options.gamma, '5')
+    assert.is.True(options.delta)
+    assert.is.True(options.epsilon)
+    assert.are.equal(options.arg1, 'arg1')
+    assert.are.equal(options.arg2, 'arg2')
   end)
 
   it('Should handle GNU-style long option with equals signs.', function ()
-    args = { [0] = 'myprog', '-ab=25', '--gamma=5', 'arg1', 'arg2' }
-    opts = parser:get_args(args)
-    assert.is.True(opts['alpha'])
-    assert.are.equal(opts['beta'], '25')
-    assert.are.equal(opts['gamma'], '5')
-    assert.are.equal(opts['arg1'], 'arg1')
-    assert.are.equal(opts['arg2'], 'arg2')
+    arguments = { [0] = 'myprog', '-ab=25', '--gamma=5', 'arg1', 'arg2' }
+    options = parser:get_arguments(arguments)
+    assert.is.True(options.alpha)
+    assert.are.equal(options.beta, '25')
+    assert.are.equal(options.gamma, '5')
+    assert.are.equal(options.arg1, 'arg1')
+    assert.are.equal(options.arg2, 'arg2')
   end)
 
   it('Should leave unspecified arguments in place in arg.', function ()
-    args = { [0] = 'myprog', '--alpha', '-b=25', '--gamma', '5', 'arg1', 'arg2',
-             'arg3', 'arg4' }
-    opts = parser:get_args(args)
-    assert.is.True(opts['alpha'])
-    assert.are.equal(opts['beta'], '25')
-    assert.are.equal(opts['gamma'], '5')
-    assert.are.equal(opts['arg1'], 'arg1')
-    assert.are.equal(opts['arg2'], 'arg2')
-    assert.are.equal(args[1], 'arg3')
-    assert.are.equal(args[2], 'arg4')
+    arguments = { [0] = 'myprog', '--alpha', '-b=25', '--gamma', '5', 'arg1',
+                  'arg2', 'arg3', 'arg4' }
+    options = parser:get_arguments(arguments)
+    assert.is.True(options.alpha)
+    assert.are.equal(options.beta, '25')
+    assert.are.equal(options.gamma, '5')
+    assert.are.equal(options.arg1, 'arg1')
+    assert.are.equal(options.arg2, 'arg2')
+    assert.are.equal(arguments[1], 'arg3')
+    assert.are.equal(arguments[2], 'arg4')
   end)
 end)

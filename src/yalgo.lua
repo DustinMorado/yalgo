@@ -25,562 +25,415 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 -- @license MIT
 -- @release 0.2.0
 local yalgo = {}
-
---- yalgo Parser class
--- @type Parser
-yalgo.Parser = {}
-
 local io, string, table = io, string, table
-local dflt_arg = rawget(_G, 'arg')
+local default_argument = rawget(_G, 'arg')
 
---- Creates a new parser object:
---
--- returns a parser with the given description, and standard help options.
--- @usage my_parser = yalgo.Parser:new('A sample program description.')
--- @param descr A description for the CLI program you are parsing
--- @return A parser object
-local function new (self, descr)
-  if not descr then
-    error('ERROR: yalgo.Parser:new: You must provide a program description.\n')
-  end
-
-  local parser = {}
-  parser.descr = descr
-  parser.args = {}
-  table.insert(parser.args, {
-    name = 'help',
-    l_opt = '--help',
-    s_opt = '-h',
-    descr = 'Display this help and exit.'
-  })
-  parser.args.n = 1
-  parser.args.n_pos = 0
+--- Creates a new parser object.
+-- Returns a parser with the given description, and standard help options.
+-- @usage parser = yalgo:new_parser('A sample program description.')
+-- @param description A description for the CLI program you are parsing
+-- @return A parser table
+function yalgo:new_parser (description)
+  local parser = {
+    description = description or '',
+    arguments = { },
+    positional_index = 1
+  }
 
   setmetatable(parser, self)
   self.__index = self
+
   -- We need to prevent this parser from calling new itself
-  parser.new = function (self)
-    error('ERROR: yalgo.Parser:new: Do not call new from a local parser.')
+  function parser:new_parser ()
+    error('ERROR: yalgo:new_parser: Do not call new from a local parser.')
   end
+
+  parser:add_argument({
+    name = 'help',
+    long_option = '--help',
+    short_option = '-h',
+    description = 'Display this help and exit.'
+  })
 
   return parser
 end
 
-local function sort_args (arg_1, arg_2)
-  -- Returns true if arg_1 should come before true arg_2
+local function sort_arguments (argument_1, argument_2)
+  -- Returns true if argument_1 comes before argument_2
 
   -- Positional arguments always come after optional arguments
-  -- If arg_1 is positional and arg_2 is not then arg_1 > arg_2
-  if (arg_1.is_pos and (not arg_2.is_pos)) then
+  if argument_1.is_positional and not argument_2.is_positional then
     return false
 
-  -- If arg_1 is not positional and arg_2 is positional then arg_1 < arg_2
-  elseif (arg_2.is_pos and (not arg_1.is_pos)) then
+  elseif not argument_1.is_positional and argument_2.is_positional then
     return true
 
-  -- If arg_1 and arg_2 are both postional then sort by position
-  elseif (arg_1.is_pos and arg_2.is_pos) then
-    return arg_1.pos < arg_2.pos
+  -- If argument_1 and argument_2 are both postional then sort by position
+  elseif argument_1.is_positional and argument_2.is_positional then
+    return argument_1.position < argument_2.position
 
-  -- If arg_1 and arg_2 are both optional then sort by option flags
+  -- If argument_1 and argument_2 are both optional then sort by option flags
+  -- If argument_1 and argument_2 both have long options sort alphabetically
+  elseif argument_1.long_option and argument_2.long_option then
+    return argument_1.long_option < argument_2.long_option
+
+  -- If one argument has long option and the other argument doesn't then sort by
+  -- the first non-dash character alphabetically with short options before long
+  elseif argument_1.long_option then
+    local argument_1_character = string.sub(argument_1.long_option, 3, 3)
+    local argument_2_character = string.sub(argument_2.short_option, 2, 2)
+    return argument_1_character < argument_2_character
+
+  elseif argument_2.long_option then
+    local argument_1_character = string.sub(argument_1.short_option, 2, 2)
+    local argument_2_character = string.sub(argument_2.long_option, 3, 3)
+    return argument_1_character <= argument_2_character
+
+  -- If both arguments don't have long option sort short options alphabetically
   else
-    -- If arg_1 and arg_2 both have long option flags sort alphabetically
-    if (arg_1.l_opt and arg_2.l_opt) then
-      return arg_1.l_opt < arg_2.l_opt
-
-    -- If arg_1 has long option flag and arg_2 does not have a long option flag
-    -- then sort by the first non-dash character alphabetically
-    elseif (arg_1.l_opt and (not arg_2.l_opt)) then
-      return (string.sub(arg_1.l_opt, 3, 3) < string.sub(arg_2.s_opt, 2, 2))
-
-    -- If arg_1 does not have a long option flag and arg_2 does then sort by the
-    -- first non-dash charcter alphabetically
-    elseif ((not arg_1.l_opt) and arg_2.l_opt) then
-      return (string.sub(arg_1.s_opt, 2, 2) <= string.sub(arg_2.l_opt, 3, 3))
-
-    -- If arg_1 and arg_2 both do not have long option flags sort short flags
-    -- alphabetically.
-    else
-      return arg_1.s_opt < arg_2.s_opt
-    end
+    return argument_1.short_option < argument_2.short_option
   end
 end
 
---- Argument template for Parser.
--- This is a sample argument object for passing into add_arg.
---
--- l_opt and s_opt flags cannot be used for positional arguments, but at least
--- one must be given for an option argument.
---
+--- Argument Template.
+-- Sample argument table for passing into add_argument.
+-- long_option and short_option flags cannot be used for positional arguments,
+-- but at least one must be given for an option argument.
 -- Option arguments cannot be required and not take arguments.
---
 -- Positional arguments cannot take arguments themselves.
---
 -- Required arguments cannot specify a default value.
---
--- Description and meta_values are not mandatory unless you use the display_help
--- function (But of course you're providing adequate documentation right? ;))
-local template_arg = {
-  name = 'option', -- Argument name used as field in returned option table.
-  l_opt = '--option', -- Specifies option long style flag
-  s_opt = '-o', -- Specifies option short style flag
-  is_pos = false, -- Indicaties whether argument is positional or an option
-  has_arg = true, -- Indicates whether option takes an argument
-  is_reqd = false, -- Indicates whether option is mandatory or not
-  dflt_val = 10, -- Specifies a default value to be used for the option
-  descr = 'lorem ipsum', -- Option description to be used for help
-  meta_val = 'ARG', -- Specifies argument placeholder string used in help
+yalgo.template_argument = {
+  name = 'option', -- Argument name used as key in returned option table.
+  long_option = '--option', -- Specifies long option style flag
+  short_option = '-o', -- Specifies short option style flag
+  is_positional = false, -- Indicaties whether argument is positional
+  has_argument = true, -- Indicates whether option takes an argument
+  is_required = false, -- Indicates whether argument is mandatory or not
+  default_value = 10, -- Specifies a default value to be used for the argument
+  description = 'lorem ipsum', -- Description to be used for display_help()
+  meta_value = 'ARG', -- Argument placeholder string used in display_help()
 }
 
---- Add an argument to a parser object
---
--- This function lets the parser know what arguments to look for at the command
--- line.
---
--- @usage my_parser:add_arg({name = 'option', l_opt = '--opt', ... })
--- @param _arg An argument table with the fields as described in template_arg
-local function add_arg (self, _arg)
+--- Add an argument to parser.arguments table.
+-- @usage parser:add_argument(template_argument)
+-- @param argument A table as described in template_argument
+function yalgo:add_argument (argument)
   -- Initial error handling for the most general errors
   -- Argument has to have a name
-  if not _arg.name then
-    error('ERROR: yalgo.Parser.add_arg: You must provide a name.')
+  if not argument.name or type(argument.name) ~= 'string' then
+    error('ERROR: yalgo:add_argument: You must provide a string name.')
 
-  -- Argument name has to be a string
-  elseif type(_arg.name) ~= 'string' then
-    error('ERROR: yalgo.Parser.add_arg: _arg.name must be a string.')
-
-  -- Parser cannot have two arguments with the same name
-  elseif self.args[_arg.name] then
-    error('ERROR: yalgo.Parser.add_arg: Option ' .. _arg.name ..
-          ' already exists.')
+  -- parser cannot have two arguments with the same name
+  elseif self.arguments[argument.name] then
+    error('ERROR: yalgo:add_argument: Option already exists.')
 
   -- Optional argument long flag must be a string of the form '--option'
-  elseif (_arg.l_opt and ((type(_arg.l_opt) ~= 'string') or
-          (string.match(_arg.l_opt, '^%-%-%w[%w_-]+') ~= _arg.l_opt))) then
-    error('ERROR: yalgo.Parser.add_arg: _arg.l_opt must be a valid string.')
+  elseif argument.long_option and (type(argument.long_option) ~= 'string' or
+         string.match(argument.long_option, '^%-%-%w[%w_-]+$') ~=
+         argument.long_option) then
+    error('ERROR: yalgo:add_argument: long_option must be a valid string.')
 
   -- Optional argument short flag must be a string of the form '-x'
-  elseif (_arg.s_opt and ((type(_arg.s_opt) ~= 'string') or
-          (string.match(_arg.s_opt, '^%-%w') ~= _arg.s_opt))) then
-    error('ERROR: yalgo.Parser.add_arg: _arg.s_opt must be a valid string.')
+  elseif argument.short_option and (type(argument.short_option) ~= 'string' or
+         string.match(argument.short_option, '^%-%w$') ~= argument.short_option)
+         then
+    error('ERROR: yalgo:add_argument: short_option must be a valid string.')
 
   -- Argument description must be a string
-  elseif (_arg.descr and (type(_arg.descr) ~= 'string')) then
-    error('ERROR: yalgo.Parser.add_arg: _arg.descr must be a string.')
+  elseif argument.description and type(argument.description) ~= 'string' then
+    error('ERROR: yalgo:add_argument: description must be a string.')
 
   -- Argument meta value must be a string
-  elseif (_arg.meta_val and (type(_arg.meta_val) ~= 'string')) then
-    error('ERROR: yalgo.Parser.add_arg: _arg.meta_val must be string.')
-  end
+  elseif argument.meta_value and type(argument.meta_value) ~= 'string' then
+    error('ERROR: yalgo:add_argument: meta_value must be a string.')
 
-  -- Handle adding a positional argument first
-  if _arg.is_pos then
-    -- Positional arguments cannot take their own arguments
-    if _arg.has_arg then
-      error('ERROR: yalgo.Parser.add_arg: Positional arguments cannot take ' ..
-            'their own arguments.')
+  -- Positional arguments cannot take their own arguments
+  elseif argument.is_positional and argument.has_argument then
+    error('ERROR: yalgo:add_argument: Positionals can\'t take arguments.')
 
-    -- Positional arguments cannot specify long or short option flags
-    elseif _arg.l_opt or _arg.s_opt then
-      error('ERROR: yalgo.Parser.add_arg: Positional arguments cannot have ' ..
-            'l_opt or s_opt values.')
+  -- Positional arguments cannot have long or short option flags
+  elseif argument.is_positional and (argument.long_option or
+         argument.short_option) then
+    error('ERROR: yalgo:add_argument: Positionals can\'t have long or short ' ..
+          'option values.')
 
-    -- Positional arguments cannot both be required and have a default value
-    elseif (_arg.is_reqd and _arg.dflt_val) then
-      error('ERROR: yalgo.Parser.add_arg: Positional arguments cannot be ' ..
-            'both required and have a default value.')
+  -- Postional arguments cannot be required and have a default value
+  elseif argument.is_positional and argument.is_required and
+         argument.default_value then
+    error('ERROR: yalgo:add_argument: Positionals can\'t be required and ' ..
+          'have a default value.')
 
-    else
-      for i = 1, self.args.n do
-        -- Positional arguments cannot be required if previous positional
-        -- arguments are not required
-        if (self.args[i].is_pos and (not self.args[i].is_reqd)) then
-          error('ERROR: yalgo.Parser.add_arg: Positional argument cannot be ' ..
-                'flagged as required if all prior positional arguments are ' ..
-                'not required as well.')
-        end
+  -- Positional arguments cannot be required if all previous positionals aren't
+  elseif argument.is_positional and argument.is_required then
+    for _, _argument in ipairs(self.arguments) do
+      if _argument.is_positional and not _argument.is_required then
+        error('ERROR: yalgo:add_argument: Positionals can\'t be required ' ..
+              'if prior positionals are not.')
       end
-      -- increment args table size and number of positional arguments
-      self.args.n = self.args.n + 1
-      self.args.n_pos = self.args.n_pos + 1
-      _arg.pos = self.args.n_pos
     end
 
-  -- Handle adding an optional argument
-  else
-    -- Optional arguments must have an option flag
-    if not ( _arg.l_opt or _arg.s_opt) then
-      error('ERROR: yalgo.Parser:add_arg: Optional arguments must specify ' ..
-            'a long and or short option flag.')
+  elseif not argument.is_positional and not argument.long_option and
+         not argument.short_option then
+    error('ERROR: yalgo:add_argument: Optional arguments must specify ' ..
+          'a long and or short option flag.')
 
-    -- Optional arguments that are required must take an argument
-    elseif (_arg.is_reqd and (not _arg.has_arg)) then
-      error('ERROR: yalgo.Parser:add_arg: Required option arguments must ' ..
-            'take an argument themselves.')
+  elseif not argument.is_positional and argument.is_required and
+         not argument.has_argument then
+    error('ERROR: yalgo:add_argument: Required option arguments must ' ..
+          'take an argument themselves.')
 
-    else
-      for i = 1, self.args.n do
-        -- Optional arguments cannot have the same long option flag
-        if self.args[i].l_opt == _arg.l_opt then
-          error('ERROR: yalgo.Parser:add_arg: Option ' .. arg_name ..
-                'already uses the long option ' .. _arg.l_opt .. '.')
-
-        -- Optional arguments cannot have the same short option flag
-        elseif self.args[i].s_opt == _arg.s_opt then
-          error('ERROR: yalgo.Parser:add_arg: Option ' .. arg_name ..
-                'already uses the short option ' .. _arg.s_opt .. '.')
-        end
+  elseif not argument.is_positional then
+    for _, _argument in ipairs(self.arguments) do
+      if (argument.long_option and _argument.long_option ==
+         argument.long_option) or (argument.short_option and
+         _argument.short_option == argument.short_option) then
+        error('ERROR: yalgo:add_argument: Duplicate options specified.')
       end
-      -- Increment args table size
-      self.args.n = self.args.n + 1
     end
   end
 
-  table.insert(self.args, {
-    pos = _arg.pos,
-    name = _arg.name,
-    l_opt = _arg.l_opt,
-    s_opt = _arg.s_opt,
-    is_pos = _arg.is_pos,
-    has_arg = _arg.has_arg,
-    is_reqd = _arg.is_reqd,
-    dflt_val = _arg.dflt_val,
-    descr = _arg.descr,
-    meta_val = _arg.meta_val
+  table.insert(self.arguments, {
+    position = argument.is_positional and #self.arguments or nil,
+    name = argument.name,
+    long_option = argument.long_option,
+    short_option = argument.short_option,
+    is_positional = argument.is_positional,
+    has_argument = argument.has_argument,
+    is_required = argument.is_required,
+    default_value = argument.default_value,
+    description = argument.description or '',
+    meta_value = argument.meta_value or ''
   })
 
-  self.args[_arg.name] = self.args[self.args.n]
-  table.sort(self.args, sort_args)
+  self.positional_index = argument.is_positional and self.positional_index or
+                          self.positional_index + 1
+
+  self.arguments[argument.name] = self.arguments[#self.arguments]
+  table.sort(self.arguments, sort_arguments)
 end
 
---- Display program help
---
--- Shows usage and detail optional and positional arguments
--- @usage my_parser:disp_help()
--- @param prog_name Program name, default is _G.arg[0]
-local function disp_help (self, prog_name)
-  prog_name = prog_name or _G.arg[0]
+--- Display program help.
+-- Shows usage and details optional and positional arguments
+-- @usage parser:display_help()
+-- @param program_name Program name which by default is _G.arg[0]
+function yalgo:display_help (program_name)
+  program_name = program_name or default_argument[0]
 
   -- Create and setup tables for Usage and arguments descriptions
-  local args_usage, args_descr = {}, {}
-  table.insert(args_usage, 'USAGE:')
-  table.insert(args_usage, prog_name)
-  table.insert(args_descr, 'OPTIONS:\n')
+  local arguments_usage, arguments_description = {}, {}
+  table.insert(arguments_usage, 'USAGE:')
+  table.insert(arguments_usage, program_name)
+  table.insert(arguments_description, 'OPTIONS:\n')
 
   -- We need to keep track when we switch from optional to positional
-  local pos_switch = false
-  for i = 1, self.args.n do
-    -- Make sure that we have argument descriptions or meta values when approp.
-    if (not self.args[i].descr or
-        ((self.args[i].has_arg or self.args[i].is_pos) and
-         (not self.args[i].meta_val))) then
-      error('ERROR: yalgo.Parser.disp_help: ' .. arg_name .. ' does not ' ..
-            'have a required description or meta_value.')
-    end
-
-    local arg_usage, arg_descr
+  local positional_switch = false
+  for _, argument in ipairs(self.arguments) do
+    local argument_usage, argument_description
     -- Handle positional arguments first
-    if self.args[i].is_pos then
-      -- If we run into our first positional argument we flip the pos_switch
-      if not pos_switch then
-        pos_switch = true
-        table.insert(args_descr, 'ARGUMENTS:\n')
-      end
-
-      if self.args[i].is_reqd then
-        arg_usage = self.args[i].meta_val
-        arg_descr = '\t' .. self.args[i].meta_val .. '\n\t\t' ..
-                    '[REQUIRED]: ' .. self.args[i].descr .. '\n'
-      else
-        arg_usage = '[' .. self.args[i].meta_val .. ']'
-        arg_descr = '\t' .. self.args[i].meta_val .. '\n\t\t' ..
-                    self.args[i].descr .. '\n'
-      end
-
-    -- Handle optional arguments
-    else
-      -- Optional arguments that are required must have arguments themselves
-      if self.args[i].is_reqd then
-        -- Both long and short option flags
-        if (self.args[i].l_opt and self.args[i].s_opt) then
-          -- --option|-x ARG
-          arg_usage = self.args[i].l_opt .. '|' .. self.args[i].s_opt .. ' ' ..
-                      self.args[i].meta_val
-          -- --option, -x ARG
-          --   [REQUIRED]: option description
-          arg_descr = '\t' .. self.args[i].l_opt .. ', ' ..
-                      self.args[i].s_opt .. ' ' .. self.args[i].meta_val ..
-                      '\n\t\t' .. '[REQUIRED]: ' .. self.args[i].descr .. '\n'
-
-        -- Only long option flag
-        elseif (self.args[i].l_opt and (not self.args[i].s_opt)) then
-          -- --option ARG
-          arg_usage = self.args[i].l_opt .. ' ' .. self.args[i].meta_val
-          -- --option ARG
-          --   [REQUIRED]: option description
-          arg_descr = '\t' .. self.args[i].l_opt .. ' ' ..
-                      self.args[i].meta_val .. '\n\t\t' .. '[REQUIRED]: ' ..
-                      self.args[i].descr .. '\n'
-
-        -- Only short option flag
-        elseif ((not self.args[i].l_opt) and self.args[i].s_opt) then
-          -- -x ARG
-          arg_usage = self.args[i].s_opt .. ' ' .. self.args[i].meta_val
-          -- -x ARG
-          --   [REQUIRED]: option description
-          arg_descr = '\t' .. self.args[i].s_opt .. ' ' ..
-                      self.args[i].meta_val .. '\n\t\t' .. '[REQUIRED]: ' ..
-                      self.args[i].descr .. '\n'
-        end
-
-      -- Optional arguments that are not required may or may not have arguments
-      else
-        -- Handle Optional arguments with arguments
-        if self.args[i].has_arg then
-          -- Both long and short options
-          if (self.args[i].l_opt and self.args[i].s_opt) then
-            -- [--option|-x ARG]
-            arg_usage = '[' .. self.args[i].l_opt .. '|' ..
-                        self.args[i].s_opt .. ' ' .. self.args[i].meta_val ..
-                        ']'
-            -- --option, -x ARG
-            --   option description
-            arg_descr = '\t' .. self.args[i].l_opt .. ', ' ..
-                        self.args[i].s_opt .. ' ' .. self.args[i].meta_val ..
-                        '\n\t\t' .. self.args[i].descr .. '\n'
-
-          -- Only long option flag
-          elseif (self.args[i].l_opt and (not self.args[i].s_opt)) then
-            -- [--option ARG]
-            arg_usage = '[' .. self.args[i].l_opt .. ' ' ..
-                        self.args[i].meta_val .. ']'
-            -- --option ARG
-            --   option description
-            arg_descr = '\t' .. self.args[i].l_opt .. ' ' ..
-                        self.args[i].meta_val .. '\n\t\t' ..
-                        self.args[i].descr .. '\n'
-
-          -- Only short option flag
-          elseif ((not self.args[i].l_opt) and self.args[i].s_opt) then
-            -- [-x ARG]
-            arg_usage = '[' .. self.args[i].s_opt .. ' ' ..
-                        self.args[i].meta_val .. ']'
-            -- -x ARG
-            --   option description
-            arg_descr = '\t' .. self.args[i].s_opt .. ' ' ..
-                        self.args[i].meta_val .. '\n\t\t' ..
-                        self.args[i].descr .. '\n'
-          end
-
-        -- Handle optional arguments without arguments
-        else
-          -- Both long and short options
-          if (self.args[i].l_opt and self.args[i].s_opt) then
-            -- [--option|-x]
-            arg_usage = '[' .. self.args[i].l_opt .. '|' ..
-                        self.args[i].s_opt .. ']'
-            -- --option, -x
-            --   option description
-            arg_descr = '\t' .. self.args[i].l_opt .. ', ' ..
-                        self.args[i].s_opt .. '\n\t\t' .. self.args[i].descr ..
-                        '\n'
-
-          -- Only long option flag
-          elseif (self.args[i].l_opt and (not self.args[i].s_opt)) then
-            -- [--option]
-            arg_usage = '[' .. self.args[i].l_opt .. ']'
-            -- --option
-            --   option description
-            arg_descr = '\t' .. self.args[i].l_opt .. '\n\t\t' ..
-                        self.args[i].descr .. '\n'
-
-          -- Only short option flag
-          elseif ((not self.args[i].l_opt) and self.args[i].s_opt) then
-            -- [-x]
-            arg_usage = '[' .. self.args[i].s_opt .. ']'
-            -- -x
-            --   option description
-            arg_descr = '\t' .. self.args[i].s_opt .. '\n\t\t' ..
-                        self.args[i].descr .. '\n'
-          end
-        end
-      end
+    if argument.is_positional and not positional_switch then
+      positional_switch = true
+      table.insert(arguments_description, 'ARGUMENTS:\n')
     end
 
-    table.insert(args_usage, arg_usage)
-    table.insert(args_descr, arg_descr)
+    if argument.is_positional and argument.is_required then
+      argument_usage = argument.meta_value
+      argument_description = '\t' .. argument.meta_value .. '\n\t\t' ..
+                             '[REQUIRED]: ' ..  argument.description .. '\n'
+
+    elseif argument.is_positional then
+      argument_usage = '[' .. argument.meta_value .. ']'
+      argument_description = '\t' .. argument.meta_value .. '\n\t\t' ..
+                             argument.description .. '\n'
+
+    elseif argument.is_required and argument.long_option and
+           argument.short_option then
+      argument_usage = argument.long_option .. '|' .. argument.short_option ..
+                       ' ' .. argument.meta_value
+      argument_description = '\t' .. argument.long_option .. ', ' ..
+                             argument.short_option .. ' ' ..
+                             argument.meta_value .. '\n\t\t[REQUIRED]: ' ..
+                             argument.description .. '\n'
+
+    elseif argument.is_required and argument.long_option then
+      argument_usage = argument.long_option .. ' ' .. argument.meta_value
+      argument_description = '\t' .. argument.long_option .. ' ' ..
+                             argument.meta_value .. '\n\t\t' ..
+                             '[REQUIRED]: ' .. argument.description .. '\n'
+
+    elseif argument.is_required and argument.short_option then
+      argument_usage = argument.short_option .. ' ' .. argument.meta_value
+      argument_description = '\t' .. argument.short_option .. ' ' ..
+                             argument.meta_value .. '\n\t\t' ..
+                             '[REQUIRED]: ' .. argument.description .. '\n'
+
+    elseif argument.has_argument and argument.long_option and
+           argument.short_option then
+      argument_usage = '[' .. argument.long_option .. '|' ..
+                       argument.short_option .. ' ' ..  argument.meta_value ..
+                       ']'
+
+      argument_description = '\t' .. argument.long_option .. ', ' ..
+                             argument.short_option .. ' ' ..
+                             argument.meta_value .. '\n\t\t' ..
+                             argument.description .. '\n'
+
+    elseif argument.has_argument and argument.long_option then
+      argument_usage = '[' .. argument.long_option .. ' ' ..
+                       argument.meta_value .. ']'
+
+      argument_description = '\t' .. argument.long_option .. ' ' ..
+                             argument.meta_value .. '\n\t\t' ..
+                             argument.description .. '\n'
+
+    elseif argument.has_argument and argument.short_option then
+      argument_usage = '[' .. argument.short_option .. ' ' ..
+                       argument.meta_value .. ']'
+
+      argument_description = '\t' .. argument.short_option .. ' ' ..
+                             argument.meta_value .. '\n\t\t' ..
+                             argument.description .. '\n'
+
+    elseif argument.long_option and argument.short_option then
+      argument_usage = '[' .. argument.long_option .. '|' ..
+                       argument.short_option .. ']'
+
+      argument_description = '\t' .. argument.long_option .. ', ' ..
+                             argument.short_option .. '\n\t\t' ..
+                             argument.description .. '\n'
+
+    elseif argument.long_option then
+      argument_usage = '[' .. argument.long_option .. ']'
+      argument_description = '\t' .. argument.long_option .. '\n\t\t' ..
+                             argument.description .. '\n'
+
+    elseif argument.short_option then
+      argument_usage = '[' .. argument.short_option .. ']'
+      argument_description = '\t' .. argument.short_option .. '\n\t\t' ..
+                             argument.description .. '\n'
+    end
+
+    table.insert(arguments_usage, argument_usage)
+    table.insert(arguments_description, argument_description)
   end
 
-  io.write(self.descr .. '\n')
-  io.write(table.concat(args_usage, ' ') .. '\n')
-  io.write(table.concat(args_descr, '') .. '\n')
+  io.write(self.description .. '\n')
+  io.write(table.concat(arguments_usage, ' ') .. '\n')
+  io.write(table.concat(arguments_description, '') .. '\n')
 end
 
-local function is_opt (_arg)
-  if not _arg then
+local function is_option (argument)
+  if not argument or argument == '-' or argument == '--' then
     return false
-  elseif _arg == '-' then
-    return false
-  elseif _arg == '--' then
-    return false
-  elseif string.match(_arg, '^%-%-?') then
+
+  elseif string.match(argument, '^%-%-?') then
     return true
+
   else
     return false
   end
 end
 
-local function is_l_opt (_arg)
-  if string.sub(_arg, 1, 2) == '--' then
-    return true
+local function is_long_option (argument)
+  return string.sub(argument, 1, 2) == '--' and true or false
+end
+
+local function find_option_name (arguments, argument)
+  for _, _argument in ipairs(arguments) do
+    if (is_long_option(argument) and
+        string.match(argument, '^--[%w_-]+') == _argument.long_option) or
+       (not is_long_option(argument) and
+        string.sub(argument, 1, 2) == _argument.short_option) then
+      return _argument.name
+    end
+  end
+  error('ERROR: yalgo:get_arguments: invalid argument given.', 2)
+end
+
+local function find_option_argument_and_shift (option, arguments)
+  local equal_index = string.find(arguments[1], '=')
+  local has_equals = not not equal_index
+  local long_option = is_long_option(arguments[1])
+  local is_globbed = not long_option and string.len(arguments[1]) > 2 and
+                     equal_index ~= 3
+
+  if has_equals and not is_globbed and not option.has_argument then
+    error('ERROR: yalgo:get_arguments: option does not take arguments.', 2)
+
+  elseif option.has_argument and not (has_equals or arguments[2] or is_globbed)
+         then
+    error('ERROR: yalgo:get_arguments: option requires an argument.', 2)
+
+  elseif has_equals and not is_globbed then
+    return string.sub(table.remove(arguments, 1), equal_index + 1)
+
+  elseif option.has_argument and not is_globbed then
+    table.remove(arguments, 1)
+    return table.remove(arguments, 1)
+
+  elseif option.has_argument then
+    return string.sub(table.remove(arguments, 1), 3)
+
+  elseif is_globbed then
+    arguments[1] = '-' .. string.sub(arguments[1], 3)
+    return nil
+
   else
-    return false
+    table.remove(arguments, 1)
+    return nil
   end
 end
 
-local function find_opt_name (self, _arg)
-  local opt_type, opt_name, opt_flag
-  if is_l_opt(_arg) then
-    opt_type = 'l_opt'
-    opt_flag = string.match(_arg, '([%w_-]+)=?')
-  else
-    opt_type = 's_opt'
-    opt_flag = string.sub(_arg, 1, 2)
-  end
-
-  for i = 1, self.args.n do
-    if opt_flag == self.args[i][opt_type] then
-      opt_name = self.args[i].name
-      break
-    end
-  end
-
-  if not opt_name then
-    error('ERROR: yalgo.Parser:get_args: ' .. _arg .. ' is not a valid ' ..
-          'argument.')
-  end
-
-  return opt_name
-end
-
-local function find_opt_arg_and_shift (self, args, _arg, opt_name)
-  local opt_arg
-  local has_eq = string.find(_arg, '=')
-  local eq_idx = has_eq
-  -- Handle long options
-  if is_l_opt(_arg) then
-    if has_eq then -- --option=ARG
-      if not self.args[opt_name].has_arg then
-        error('ERROR: yalgo.Parser:get_args: ' .. self.args[opt_name].l_opt ..
-              ' does not take arguments.')
-      end
-
-      opt_arg = string.sub(_arg, (eq_idx + 1), -1)
-      table.remove(args, 1)
-
-    elseif self.args[opt_name].has_arg then -- --option ARG
-      if not args[2] then
-        error('ERROR: yalgo.Parser.get_args: ' .. self.args[opt_name].l_opt ..
-              ' requires an argument.')
-      else
-        opt_arg = args[2]
-        table.remove(args, 1)
-        table.remove(args, 1)
-      end
-
-    else -- --option
-      table.remove(args, 1)
-    end
-
-  -- Handle short options
-  else
-    local has_glob = string.len(_arg) > 2
-    if eq_idx == 3 then -- -x=ARG
-      if not self.args[opt_name].has_arg then
-        error('ERROR: yalgo.Parser:get_args: ' .. self.args[opt_name].s_opt ..
-              ' does not take arguments.')
-      end
-
-      opt_arg = string.sub(_arg, (eq_idx + 1), -1)
-      table.remove(args, 1)
-
-    elseif (has_glob and self.args[opt_name].has_arg) then -- -xARG
-      opt_arg = string.sub(_arg, 3, -1)
-      table.remove(args, 1)
-
-    elseif self.args[opt_name].has_arg then -- -x ARG
-      if not args[2] then
-        error('ERROR: yalgo.Parser.get_args: ' .. self.args[opt_name].s_opt ..
-              ' requires an argument.')
-      else
-        opt_arg = args[2]
-        table.remove(args, 1)
-        table.remove(args, 1)
-      end
-
-    else -- -x
-      if has_glob then -- -xabc
-        args[1] = '-' .. string.sub(_arg, 3, -1)
-      else
-        table.remove(args, 1)
-      end
-    end
-  end
-
-  return opt_arg
-end
-
---- Get arguments
---
--- takes an arg table and updates the parser arg table values returning a table
--- indexed by argument name storing the found and default values.
--- @usage found_args = my_parser:get_args()
--- @param args Sequence table of arguments, default is _G.arg
--- @return A table indexed by parser argument name with found and default values
-local function get_args (self, args)
-  args = args or dflt_arg
-  local _args = {}
+--- Get arguments.
+-- Takes a table similar to and by default _G.arg, and returns a table of
+-- options storing the found and default values.
+-- @usage options = my_parser:get_arguments()
+-- @param arguments Sequence of arguments by default _G.arg
+-- @return A table indexed by parser.arguments[name]
+function yalgo:get_arguments (arguments)
+  arguments = arguments or default_argument
+  local options = {}
   -- Setup the return table with default values from the parser
-  for i = 1, self.args.n do
-    _args[self.args[i].name] = self.args[i].dflt_val
+  for _, _argument in ipairs(self.arguments) do
+    options[_argument.name] = _argument.default_value
   end
 
-  local _arg = args[1]
+  if #arguments == 0 then
+    for _, _argument in ipairs(self.arguments) do
+      if _argument.is_required then
+        error('ERROR: yalgo:get_arguments: Required argument was not given.')
+      end
+    end
+    return options
+  end
+
   -- Handle optional arguments
-  while is_opt(_arg) do
-    local opt_name = find_opt_name(self, _arg)
-    _args[opt_name] = _args[opt_name] or true
-    local opt_arg = find_opt_arg_and_shift(self, args, _arg, opt_name)
-    _args[opt_name] = opt_arg or _args[opt_name]
-    _arg = args[1]
+  while is_option(arguments[1]) do
+    local option_name = find_option_name(self.arguments, arguments[1])
+    if option_name == 'help' then
+      self:display_help(arguments[0])
+      os.exit(0)
+    end
+
+    local option_argument = find_option_argument_and_shift(
+                              self.arguments[option_name], arguments)
+    options[option_name] = option_argument or options[option_name] or true
   end
 
   -- Handle positional arguments
-  for i = 1, self.args.n_pos do
-    pos_idx = self.args.n - self.args.n_pos + i
-    pos_name = self.args[pos_idx].name
-    _args[pos_name] = args[1] or _args[pos_name]
-    table.remove(args, 1)
+  for i = self.positional_index, #self.arguments  do
+      options[self.arguments[i].name] = arguments[1] and
+                                        table.remove(arguments, 1) or
+                                        options[self.arguments[i].name]
   end
 
   -- Check for all required arguments
-  for i = 1, self.args.n do
-    if (self.args[i].is_reqd and (not _args[self.args[i].name])) then
-      error('ERROR: yalgo.Parser:get_args: ' .. self.args[i].name .. ' is ' ..
-            'required and was not given.')
+  for _, _argument in ipairs(self.arguments) do
+    if _argument.is_required and not options[_argument.name] then
+      error('ERROR: yalgo.:get_arguments: Required argument not given.', 2)
     end
   end
 
-  return _args
+  return options
 end
-
---- @export
-yalgo.Parser = {
-  new = new,
-  add_arg = add_arg,
-  get_args = get_args,
-  disp_help = disp_help,
-  template_arg = template_arg
-}
 
 return yalgo
